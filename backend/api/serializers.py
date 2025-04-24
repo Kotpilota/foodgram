@@ -145,11 +145,25 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
                 'Необходимо добавить хотя бы один ингредиент'
             )
 
-        ingredient_ids = [ingredient['id'].id for ingredient in ingredients]
-        if len(ingredient_ids) != len(set(ingredient_ids)):
+        seen = set()
+        duplicates = []
+
+        for ingredient in ingredients:
+            ing_id = ingredient['id'].id
+            if ing_id in seen:
+                duplicates.append(ing_id)
+            seen.add(ing_id)
+
+        if duplicates:
+            duplicate_names = [
+                Ingredient.objects.get(id=ing_id).name
+                for ing_id in duplicates
+            ]
             raise serializers.ValidationError(
-                'Ингредиенты не должны повторяться'
+                f'Следующие ингредиенты повторяются: '
+                f'{", ".join(duplicate_names)}'
             )
+
         return ingredients
 
     def validate_tags(self, tags):
