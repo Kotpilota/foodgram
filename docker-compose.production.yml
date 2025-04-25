@@ -1,0 +1,47 @@
+version: '3.3'
+
+volumes:
+  pg_data:
+  static_dir:
+  media_dir:
+
+services:
+  db:
+    image: postgres:13
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    env_file:
+      - ./.env
+    restart: always
+
+  backend:
+    image: kotpilota/foodgram_backend:latest
+    restart: always
+    volumes:
+      - static_dir:/app/static/
+      - media_dir:/app/media/
+    env_file:
+      - ./.env
+    depends_on:
+      - db
+
+  frontend:
+    image: kotpilota/foodgram_frontend:latest
+    volumes:
+      - ./frontend/:/app/result_build/
+    depends_on:
+      - backend
+
+  nginx:
+    image: kotpilota/foodgram_gateway:latest
+    restart: always
+    ports:
+      - 8080:80
+    volumes:
+      - ./frontend/build:/usr/share/nginx/html/
+      - ./docs/:/usr/share/nginx/html/api/docs/
+      - static_dir:/etc/nginx/html/static/
+      - media_dir:/etc/nginx/html/media/
+    depends_on:
+      - backend
+      - frontend
