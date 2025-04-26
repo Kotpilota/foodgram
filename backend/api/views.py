@@ -34,11 +34,14 @@ from .serializers import (
 
 
 class UserViewSet(DjoserUserViewSet, SubscriptionActionMixin):
+    """ViewSet для работы с пользователями."""
+
     queryset = User.objects.all()
     serializer_class = UserSerializer
     pagination_class = CustomPagination
 
     def get_permissions(self):
+        """Определяет необходимые разрешения в зависимости от действия."""
         if self.action == 'retrieve':
             return [permissions.AllowAny()]
         return super().get_permissions()
@@ -49,6 +52,7 @@ class UserViewSet(DjoserUserViewSet, SubscriptionActionMixin):
         permission_classes=[permissions.IsAuthenticated]
     )
     def subscriptions(self, request):
+        """Возвращает список авторов, на которых подписан пользователь."""
         user = request.user
         subscriptions = User.objects.filter(subscribers__user=user)
         page = self.paginate_queryset(subscriptions)
@@ -63,6 +67,7 @@ class UserViewSet(DjoserUserViewSet, SubscriptionActionMixin):
         permission_classes=[permissions.IsAuthenticated]
     )
     def subscribe(self, request, id=None):
+        """Позволяет подписаться/отписаться от автора."""
         return self.handle_subscription_action(
             request=request,
             user_id=id,
@@ -76,6 +81,7 @@ class UserViewSet(DjoserUserViewSet, SubscriptionActionMixin):
         permission_classes=[permissions.IsAuthenticated]
     )
     def set_password(self, request):
+        """Изменяет пароль текущего пользователя."""
         user = request.user
         serializer = SetPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -100,6 +106,7 @@ class UserViewSet(DjoserUserViewSet, SubscriptionActionMixin):
         url_path='me/avatar'
     )
     def avatar(self, request):
+        """Устанавливает или удаляет аватар пользователя."""
         user = request.user
 
         if request.method == 'PUT':
@@ -123,12 +130,16 @@ class UserViewSet(DjoserUserViewSet, SubscriptionActionMixin):
 
 
 class TagViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet для работы с тегами (только чтение)."""
+
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
     pagination_class = None
 
 
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet для работы с ингредиентами (только чтение)."""
+
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
     pagination_class = None
@@ -144,6 +155,8 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
+    """ViewSet для полной работы с рецептами."""
+
     queryset = Recipe.objects.all()
     serializer_class = RecipeSerializer
     permission_classes = [IsAuthorOrReadOnly]
@@ -184,6 +197,7 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
         permission_classes=[permissions.IsAuthenticated]
     )
     def favorite(self, request, pk=None):
+        """Добавляет/удаляет рецепт в избранное."""
         return self.handle_collection_action(
             request=request,
             pk=pk,
@@ -200,6 +214,7 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
         permission_classes=[permissions.IsAuthenticated]
     )
     def shopping_cart(self, request, pk=None):
+        """Добавляет/удаляет рецепт в список покупок."""
 
         return self.handle_collection_action(
             request=request,
@@ -217,6 +232,7 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
         permission_classes=[permissions.IsAuthenticated]
     )
     def download_shopping_cart(self, request):
+        """Скачивает список покупок пользователя в формате txt."""
         user = request.user
 
         cart_recipes = Recipe.objects.filter(
@@ -266,6 +282,7 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
         url_path='get-link'
     )
     def get_link(self, request, pk=None):
+        """Возвращает короткую ссылку на рецепт."""
         recipe = get_object_or_404(Recipe, id=pk)
         serializer = RecipeGetShortLinkSerializer(
             recipe, context={'request': request}
