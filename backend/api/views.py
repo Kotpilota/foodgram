@@ -1,10 +1,11 @@
 from django.db.models import Prefetch
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from recipes.models import (
     Favorite,
@@ -288,3 +289,14 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
             recipe, context={'request': request}
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ShortLinkRedirectView(APIView):
+    """Обработчик коротких ссылок на рецепты."""
+
+    permission_classes = []
+
+    def get(self, request, recipe_id):
+        """Перенаправляет с короткой ссылки на страницу рецепта."""
+        recipe = get_object_or_404(Recipe, id=recipe_id)
+        return HttpResponseRedirect(f'/recipes/{recipe.id}')
