@@ -1,11 +1,50 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, UserManager
 from django.db import models
 
 from core.constants import EMAIL_LENGTH, MAX_FIO_LENGTH, USERNAME_LENGTH
 from core.validators import username_validator
 
 
+class CustomUserManager(UserManager):
+    """Менеджер пользователей с дополнительной функциональностью."""
+
+    def create_user(self, email, username=None, password=None, **extra_fields):
+        """
+        Создает и сохраняет пользователя с указанным email и паролем.
+        """
+        if not email:
+            raise ValueError('Email обязателен')
+
+        if not username:
+            username = self.normalize_email(email).split('@')[0]
+
+        email = self.normalize_email(email)
+        user = self.model(
+            email=email,
+            username=username,
+            **extra_fields
+        )
+
+        if password:
+            user.set_password(password)
+
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, username=None, password=None,
+                         **extra_fields):
+        """
+        Создает и сохраняет суперпользователя с указанным email и паролем.
+        """
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+
+        return self.create_user(email, username, password, **extra_fields)
+
+
 class User(AbstractUser):
+    """Модель пользователя с дополнительными полями."""
+
     email = models.EmailField('Почта', unique=True, max_length=EMAIL_LENGTH)
     username = models.CharField(
         'Никнейм',
@@ -25,6 +64,8 @@ class User(AbstractUser):
     REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
     USERNAME_FIELD = 'email'
 
+    objects = CustomUserManager()
+
     class Meta:
         ordering = ('username',)
         verbose_name = 'Пользователь'
@@ -35,6 +76,8 @@ class User(AbstractUser):
 
 
 class Subscription(models.Model):
+    """Модель для хранения подписок пользователей на авторов."""
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,

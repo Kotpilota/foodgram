@@ -6,104 +6,103 @@ from recipes.models import Recipe
 from users.models import User
 
 
-class CollectionActionMixin:
-    """
-    Миксин для действий с коллекциями.
-    Предоставляет базовую логику добавления/удаления объектов из коллекций.
-    """
+class BaseCollectionMixin:
+    """Базовый миксин для действий с коллекциями и подписками."""
+
+    def handle_collection_action(self, request, obj_id, model_class,
+                                 success_message=None,
+                                 error_exists_message=None,
+                                 error_not_exists_message=None,
+                                 serializer_class=None,
+                                 obj_model=None,
+                                 obj_field_name='recipe',
+                                 author_field_name=None):
+        """Обрабатывает действия добавления/удаления объектов из коллекций."""
+        user = request.user
+
+        if request.method == 'POST':
+            obj = get_object_or_404(obj_model or Recipe, id=obj_id)
+            filter_params = {'user': user}
+
+            if author_field_name:
+                filter_params[author_field_name] = obj
+            else:
+                filter_params[obj_field_name] = obj
+
+            if model_class.objects.filter(**filter_params).exists():
+                return Response(
+                    {'error': error_exists_message},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            instance = model_class(**filter_params)
+            instance.save()
+
+            serializer = serializer_class(
+                obj, context={'request': request}
+            )
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        elif request.method == 'DELETE':
+            filter_params = {'user': user}
+            if author_field_name:
+                filter_params[author_field_name] = obj_id
+            else:
+                filter_params[obj_field_name + '_id'] = obj_id
+            deleted_count = model_class.objects.filter(
+                **filter_params).delete()[0]
+            if not deleted_count:
+                return Response(
+                    {'error': error_not_exists_message},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CollectionActionMixin(BaseCollectionMixin):
+    """Миксин для действий с коллекциями рецептов."""
 
     def handle_collection_action(self, request, pk, model_class,
                                  success_message,
                                  error_exists_message,
                                  error_not_exists_message,
                                  serializer_class):
-        """
-        Обрабатывает действия добавления/удаления объектов из коллекций.
-
-        Args:
-            request: Объект запроса
-            pk: Идентификатор рецепта
-            model_class: Класс модели коллекции (Favorite, ShoppingCart)
-            success_message: Сообщение об успешном выполнении для POST-запроса
-            error_exists_message: Сообщение об ошибке, если объект уже есть
-            error_not_exists_message: Сообщение об ошибке, если объекта нет
-            serializer_class: Класс сериализатора для возврата данных
-        """
-        recipe = get_object_or_404(Recipe, id=pk)
-        user = request.user
-
-        if request.method == 'POST':
-            if model_class.objects.filter(user=user, recipe=recipe).exists():
-                return Response(
-                    {'error': error_exists_message},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            model_class.objects.create(user=user, recipe=recipe)
-            serializer = serializer_class(recipe)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        if request.method == 'DELETE':
-            collection_item = model_class.objects.filter(user=user,
-                                                         recipe=recipe)
-            if not collection_item.exists():
-                return Response(
-                    {'error': error_not_exists_message},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            collection_item.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+        """Обрабатывает действия с рецептами в коллекциях."""
+        return super().handle_collection_action(
+            request=request,
+            obj_id=pk,
+            model_class=model_class,
+            error_exists_message=error_exists_message,
+            error_not_exists_message=error_not_exists_message,
+            serializer_class=serializer_class,
+            obj_model=Recipe,
+            obj_field_name='recipe'
+        )
 
 
-class SubscriptionActionMixin:
-    """
-    Миксин для действий с подписками на авторов.и.
-    Предоставляет базовую логику подписки/отписк
-    """
+class SubscriptionActionMixin(BaseCollectionMixin):
+    """Миксин для действий с подписками на авторов."""
 
     def handle_subscription_action(self, request, user_id, model_class,
                                    serializer_class):
-        """
-        Обрабатывает действия подписки/отписки от автора.
-
-        Args:
-            request: Объект запроса
-            user_id: Идентификатор автора
-            model_class: Класс модели подписок (Subscription)
-            serializer_class: Класс сериализатора для возврата данных
-        """
-        user = request.user
-        author = get_object_or_404(User, id=user_id)
-
+        """Обрабатывает действия подписки/отписки от авторов."""
         if request.method == 'POST':
-            if user == author:
+            author = get_object_or_404(User, id=user_id)
+            if request.user == author:
                 return Response(
                     {'error': 'Нельзя подписаться на самого себя'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            if model_class.objects.filter(user=user, author=author).exists():
-                return Response(
-                    {'error': 'Вы уже подписаны на этого автора'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            model_class.objects.create(user=user, author=author)
-            serializer = serializer_class(
-                author, context={'request': request}
-            )
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        if request.method == 'DELETE':
-            subscription = model_class.objects.filter(
-                user=user, author=author
-            )
-            if not subscription.exists():
-                return Response(
-                    {'error': 'Вы не подписаны на этого автора'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            subscription.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+        return super().handle_collection_action(
+            request=request,
+            obj_id=user_id,
+            model_class=model_class,
+            error_exists_message='Вы уже подписаны на этого автора',
+            error_not_exists_message='Вы не подписаны на этого автора',
+            serializer_class=serializer_class,
+            obj_model=User,
+            obj_field_name='author',
+            author_field_name='author'
+        )

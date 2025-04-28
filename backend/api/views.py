@@ -1,8 +1,8 @@
-from django.db.models import Prefetch
+from django.db.models import Count, Exists, OuterRef, Prefetch, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from djoser.views import UserViewSet as DjoserUserViewSet
-from rest_framework import permissions, status, viewsets
+from rest_framework import filters, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -22,7 +22,6 @@ from .permissions import IsAuthorOrReadOnly
 from .serializers import (
     IngredientSerializer,
     RecipeCreateSerializer,
-    RecipeGetShortLinkSerializer,
     RecipeMinifiedSerializer,
     RecipeSerializer,
     SetAvatarSerializer,
@@ -54,7 +53,9 @@ class UserViewSet(DjoserUserViewSet, SubscriptionActionMixin):
     def subscriptions(self, request):
         """Возвращает список авторов, на которых подписан пользователь."""
         user = request.user
-        subscriptions = User.objects.filter(subscribers__user=user)
+        subscriptions = User.objects.filter(subscribers__user=user).annotate(
+            recipes_count=Count('recipes')
+        )
         page = self.paginate_queryset(subscriptions)
         serializer = UserWithRecipesSerializer(
             page, many=True, context={'request': request}
@@ -125,7 +126,6 @@ class UserViewSet(DjoserUserViewSet, SubscriptionActionMixin):
         if request.method == 'DELETE':
             if user.avatar:
                 user.avatar.delete()
-                user.save()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -143,27 +143,41 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
     pagination_class = None
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        name = self.request.query_params.get('name')
-
-        if name:
-            queryset = queryset.filter(name__istartswith=name)
-
-        return queryset
+    filter_backends = (filters.SearchFilter,)
+    search_fields = ('^name',)
 
 
 class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
     """ViewSet для полной работы с рецептами."""
 
-    queryset = Recipe.objects.all()
     serializer_class = RecipeSerializer
     permission_classes = [IsAuthorOrReadOnly]
     pagination_class = CustomPagination
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        """Возвращает отфильтрованный QuerySet с аннотациями."""
+        queryset = Recipe.objects.select_related('author').prefetch_related(
+            'tags',
+            Prefetch(
+                'recipe_ingredients',
+                queryset=RecipeIngredient.objects.select_related('ingredient')
+            )
+        )
+
+        user = self.request.user
+        if user.is_authenticated:
+            queryset = queryset.annotate(
+                is_favorited=Exists(
+                    Favorite.objects.filter(
+                        user=user, recipe=OuterRef('pk')
+                    )
+                ),
+                is_in_shopping_cart=Exists(
+                    ShoppingCart.objects.filter(
+                        user=user, recipe=OuterRef('pk')
+                    )
+                )
+            )
 
         author = self.request.query_params.get('author')
         tags = self.request.query_params.getlist('tags')
@@ -177,16 +191,16 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
         if tags:
             queryset = queryset.filter(tags__slug__in=tags).distinct()
 
-        if is_favorited and self.request.user.is_authenticated:
-            queryset = queryset.filter(favorited_by__user=self.request.user)
+        if is_favorited and user.is_authenticated:
+            queryset = queryset.filter(favorited_by__user=user)
 
-        if is_in_shopping_cart and self.request.user.is_authenticated:
-            queryset = queryset.filter(
-                in_shopping_cart__user=self.request.user)
+        if is_in_shopping_cart and user.is_authenticated:
+            queryset = queryset.filter(in_shopping_cart__user=user)
 
         return queryset
 
     def get_serializer_class(self):
+        """Возвращает класс сериализатора в зависимости от действия."""
         if self.action in ['create', 'update', 'partial_update']:
             return RecipeCreateSerializer
         return RecipeSerializer
@@ -215,7 +229,6 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
     )
     def shopping_cart(self, request, pk=None):
         """Добавляет/удаляет рецепт в список покупок."""
-
         return self.handle_collection_action(
             request=request,
             pk=pk,
@@ -226,6 +239,28 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
             serializer_class=RecipeMinifiedSerializer
         )
 
+    def _create_shopping_list_content(self, user):
+        """Создает содержимое списка покупок."""
+        ingredients = RecipeIngredient.objects.filter(
+            recipe__in_shopping_cart__user=user
+        ).values(
+            'ingredient__name', 'ingredient__measurement_unit'
+        ).annotate(
+            total_amount=Sum('amount')
+        ).order_by('ingredient__name')
+
+        shopping_list = [
+            f"Список покупок для {user.first_name} {user.last_name}\n\n"
+        ]
+
+        for item in ingredients:
+            name = item['ingredient__name']
+            unit = item['ingredient__measurement_unit']
+            amount = item['total_amount']
+            shopping_list.append(f"{name} ({unit}) — {amount}\n")
+
+        return '\n'.join(shopping_list)
+
     @action(
         detail=False,
         methods=['get'],
@@ -234,57 +269,26 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
     def download_shopping_cart(self, request):
         """Скачивает список покупок пользователя в формате txt."""
         user = request.user
-
-        cart_recipes = Recipe.objects.filter(
-            in_shopping_cart__user=user
-        ).prefetch_related(
-            Prefetch(
-                'recipe_ingredients',
-                queryset=RecipeIngredient.objects.select_related('ingredient')
-            )
-        )
-
-        ingredients_dict = {}
-
-        for recipe in cart_recipes:
-            for recipe_ingredient in recipe.recipe_ingredients.all():
-                ingredient = recipe_ingredient.ingredient
-                key = (ingredient.name, ingredient.measurement_unit)
-
-                if key in ingredients_dict:
-                    ingredients_dict[key] += recipe_ingredient.amount
-                else:
-                    ingredients_dict[key] = recipe_ingredient.amount
-
-        sorted_ingredients = sorted(ingredients_dict.items(),
-                                    key=lambda x: x[0][0])
-
-        shopping_list = [
-            f"Список покупок для {user.first_name} {user.last_name}\n\n"
-        ]
-
-        for (name, unit), amount in sorted_ingredients:
-            shopping_list.append(
-                f"{name} ({unit}) — {amount}\n"
-            )
+        content = self._create_shopping_list_content(user)
 
         response = HttpResponse(
-            content='\n'.join(shopping_list),
+            content=content,
             content_type='text/plain'
         )
-        response[
-            'Content-Disposition'] = 'attachment; filename="shopping_list.txt"'
+        response['Content-Disposition'] = ('attachment; '
+                                           'filename="shopping_list.txt"'
+                                           )
         return response
 
     @action(
         detail=True,
-        methods=['get'],
-        url_path='get-link'
+        methods=['get']
     )
     def get_link(self, request, pk=None):
         """Возвращает короткую ссылку на рецепт."""
         recipe = get_object_or_404(Recipe, id=pk)
-        serializer = RecipeGetShortLinkSerializer(
-            recipe, context={'request': request}
+        short_link = f"{request.scheme}://{request.get_host()}/s/{recipe.id}"
+        return Response(
+            {"short-link": short_link},
+            status=status.HTTP_200_OK
         )
-        return Response(serializer.data, status=status.HTTP_200_OK)
