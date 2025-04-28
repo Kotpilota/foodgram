@@ -250,14 +250,14 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
         ).order_by('ingredient__name')
 
         shopping_list = [
-            f"Список покупок для {user.first_name} {user.last_name}\n\n"
+            'Список покупок\n\n'
         ]
 
         for item in ingredients:
             name = item['ingredient__name']
             unit = item['ingredient__measurement_unit']
             amount = item['total_amount']
-            shopping_list.append(f"{name} ({unit}) — {amount}\n")
+            shopping_list.append(f'{name} ({unit}) — {amount}\n')
 
         return '\n'.join(shopping_list)
 
@@ -288,8 +288,8 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
     def get_link(self, request, pk=None):
         """Возвращает короткую ссылку на рецепт."""
         recipe = get_object_or_404(Recipe, id=pk)
-        short_link = f"{request.scheme}://{request.get_host()}/s/{recipe.id}"
+        short_link = f'{request.scheme}://{request.get_host()}/s/{recipe.id}'
         return Response(
-            {"short-link": short_link},
+            {'short-link': short_link},
             status=status.HTTP_200_OK
         )
