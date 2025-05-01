@@ -25,7 +25,6 @@ from .serializers import (
     FavoriteSerializer,
     IngredientSerializer,
     RecipeCreateSerializer,
-    RecipeMinifiedSerializer,
     RecipeSerializer,
     SetAvatarSerializer,
     SetPasswordSerializer,
