@@ -124,11 +124,13 @@ class UserRecipeRelation(models.Model):
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
+        related_name='%(class)s',
         verbose_name='Пользователь'
     )
     recipe = models.ForeignKey(
         Recipe,
         on_delete=models.CASCADE,
+        related_name='%(class)s_by',
         verbose_name='Рецепт'
     )
 
@@ -145,12 +147,6 @@ class UserRecipeRelation(models.Model):
 class Favorite(UserRecipeRelation):
     """Модель для хранения избранных рецептов пользователя."""
 
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='favorites',
-        verbose_name='Пользователь'
-    )
     recipe = models.ForeignKey(
         Recipe,
         on_delete=models.CASCADE,
@@ -158,7 +154,7 @@ class Favorite(UserRecipeRelation):
         verbose_name='Рецепт'
     )
 
-    class Meta(UserRecipeRelation.Meta):
+    class Meta:
         verbose_name = 'Избранное'
         verbose_name_plural = 'Избранное'
         constraints = [
@@ -172,12 +168,6 @@ class Favorite(UserRecipeRelation):
 class ShoppingCart(UserRecipeRelation):
     """Модель для хранения рецептов в списке покупок пользователя."""
 
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='shopping_cart',
-        verbose_name='Пользователь'
-    )
     recipe = models.ForeignKey(
         Recipe,
         on_delete=models.CASCADE,
@@ -185,7 +175,7 @@ class ShoppingCart(UserRecipeRelation):
         verbose_name='Рецепт'
     )
 
-    class Meta(UserRecipeRelation.Meta):
+    class Meta:
         verbose_name = 'Список покупок'
         verbose_name_plural = 'Списки покупок'
         constraints = [
