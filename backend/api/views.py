@@ -20,12 +20,14 @@ from .mixins import CollectionActionMixin, SubscriptionActionMixin
 from .pagination import CustomPagination
 from .permissions import IsAuthorOrReadOnly
 from .serializers import (
+    FavoriteSerializer,
     IngredientSerializer,
     RecipeCreateSerializer,
-    RecipeMinifiedSerializer,
     RecipeSerializer,
     SetAvatarSerializer,
     SetPasswordSerializer,
+    ShoppingCartSerializer,
+    SubscriptionSerializer,
     TagSerializer,
     UserSerializer,
     UserWithRecipesSerializer,
@@ -73,7 +75,7 @@ class UserViewSet(DjoserUserViewSet, SubscriptionActionMixin):
             request=request,
             user_id=id,
             model_class=Subscription,
-            serializer_class=UserWithRecipesSerializer
+            serializer_class=SubscriptionSerializer
         )
 
     @action(
@@ -212,14 +214,11 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
     )
     def favorite(self, request, pk=None):
         """Добавляет/удаляет рецепт в избранное."""
-        return self.handle_collection_action(
+        return self.handle_favorite_action(
             request=request,
             pk=pk,
             model_class=Favorite,
-            success_message='Рецепт успешно добавлен в избранное',
-            error_exists_message='Рецепт уже в избранном',
-            error_not_exists_message='Рецепт не в избранном',
-            serializer_class=RecipeMinifiedSerializer
+            serializer_class=FavoriteSerializer
         )
 
     @action(
@@ -229,14 +228,11 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
     )
     def shopping_cart(self, request, pk=None):
         """Добавляет/удаляет рецепт в список покупок."""
-        return self.handle_collection_action(
+        return self.handle_shopping_cart_action(
             request=request,
             pk=pk,
             model_class=ShoppingCart,
-            success_message='Рецепт успешно добавлен в список покупок',
-            error_exists_message='Рецепт уже в списке покупок',
-            error_not_exists_message='Рецепт не в списке покупок',
-            serializer_class=RecipeMinifiedSerializer
+            serializer_class=ShoppingCartSerializer
         )
 
     def _create_shopping_list_content(self, user):
@@ -259,7 +255,7 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
             amount = item['total_amount']
             shopping_list.append(f'{name} ({unit}) — {amount}\n')
 
-        return '\n'.join(shopping_list)
+        return ''.join(shopping_list)
 
     @action(
         detail=False,
@@ -280,11 +276,7 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
                                            )
         return response
 
-    @action(
-        detail=True,
-        methods=['get'],
-        url_path='get-link'
-    )
+    @action(detail=True, methods=['get'], url_path='get-link')
     def get_link(self, request, pk=None):
         """Возвращает короткую ссылку на рецепт."""
         recipe = get_object_or_404(Recipe, id=pk)
