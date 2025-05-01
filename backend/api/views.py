@@ -1,6 +1,7 @@
 from django.db.models import Count, Exists, OuterRef, Prefetch, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
 from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework import filters, permissions, status, viewsets
 from rest_framework.decorators import action
@@ -16,6 +17,7 @@ from recipes.models import (
 )
 from users.models import Subscription, User
 
+from .filters import IngredientFilter, RecipeFilter
 from .mixins import CollectionActionMixin, SubscriptionActionMixin
 from .pagination import CustomPagination
 from .permissions import IsAuthorOrReadOnly
@@ -23,6 +25,7 @@ from .serializers import (
     FavoriteSerializer,
     IngredientSerializer,
     RecipeCreateSerializer,
+    RecipeMinifiedSerializer,
     RecipeSerializer,
     SetAvatarSerializer,
     SetPasswordSerializer,
@@ -145,8 +148,8 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
     pagination_class = None
-    filter_backends = (filters.SearchFilter,)
-    search_fields = ('^name',)
+    filter_backends = (DjangoFilterBackend,)
+    filterset_class = IngredientFilter
 
 
 class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
@@ -155,9 +158,12 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
     serializer_class = RecipeSerializer
     permission_classes = [IsAuthorOrReadOnly]
     pagination_class = CustomPagination
+    filter_backends = (DjangoFilterBackend, filters.OrderingFilter)
+    filterset_class = RecipeFilter
+    ordering = ('-pub_date',)
 
     def get_queryset(self):
-        """Возвращает отфильтрованный QuerySet с аннотациями."""
+        """Возвращает базовый QuerySet с оптимизацией запросов."""
         queryset = Recipe.objects.select_related('author').prefetch_related(
             'tags',
             Prefetch(
@@ -180,24 +186,6 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
                     )
                 )
             )
-
-        author = self.request.query_params.get('author')
-        tags = self.request.query_params.getlist('tags')
-        is_favorited = self.request.query_params.get('is_favorited')
-        is_in_shopping_cart = self.request.query_params.get(
-            'is_in_shopping_cart')
-
-        if author:
-            queryset = queryset.filter(author_id=author)
-
-        if tags:
-            queryset = queryset.filter(tags__slug__in=tags).distinct()
-
-        if is_favorited and user.is_authenticated:
-            queryset = queryset.filter(favorited_by__user=user)
-
-        if is_in_shopping_cart and user.is_authenticated:
-            queryset = queryset.filter(in_shopping_cart__user=user)
 
         return queryset
 
