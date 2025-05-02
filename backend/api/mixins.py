@@ -6,120 +6,121 @@ from recipes.models import Recipe
 from users.models import User
 
 
+def create_relation(request, obj_id, model_class, serializer_class, obj_model,
+                    user_field='user', obj_field='recipe', error_exists=None,
+                    error_self=None, check_self=False):
+    """Создаёт отношения между пользователем и объектом."""
+    user = request.user
+    obj = get_object_or_404(obj_model, id=obj_id)
+
+    if check_self and user == obj:
+        return Response(
+            {
+                'error': error_self or 'Нельзя подписаться на себя'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    filter_kwargs = {user_field: user, obj_field: obj}
+    if model_class.objects.filter(**filter_kwargs).exists():
+        return Response(
+            {'error': error_exists or 'Отношение уже существует'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    data = {user_field: user.id, obj_field: obj.id}
+    serializer = serializer_class(data=data, context={'request': request})
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+def delete_relation(request, obj_id, model_class, user_field='user',
+                    obj_field='recipe', error_not_found=None):
+    """Удаляет отношения пользователь - объект."""
+    user = request.user
+
+    filter_kwargs = {user_field: user, f'{obj_field}_id': obj_id}
+    deleted, _ = model_class.objects.filter(**filter_kwargs).delete()
+
+    if not deleted:
+        return Response(
+            {'error': error_not_found or 'Отношение не найдено'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class CollectionActionMixin:
     """Миксин для действий с коллекциями рецептов."""
 
-    def handle_favorite_action(
-            self, request, pk, model_class, serializer_class):
+    def handle_favorite_action(self, request, pk, model_class,
+                               serializer_class):
         """Обрабатывает действия добавления/удаления рецептов в избранное."""
-        user = request.user
-        recipe = get_object_or_404(Recipe, id=pk)
-
         if request.method == 'POST':
-            if model_class.objects.filter(user=user, recipe=recipe).exists():
-                return Response(
-                    {'error': 'Рецепт уже в избранном'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            data = {'user': user.id, 'recipe': recipe.id}
-            serializer = serializer_class(
-                data=data, context={'request': request})
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-
-            return Response(
-                serializer.data,
-                status=status.HTTP_201_CREATED
+            return create_relation(
+                request=request,
+                obj_id=pk,
+                model_class=model_class,
+                serializer_class=serializer_class,
+                obj_model=Recipe,
+                error_exists='Рецепт уже в избранном'
+            )
+        elif request.method == 'DELETE':
+            return delete_relation(
+                request=request,
+                obj_id=pk,
+                model_class=model_class,
+                error_not_found='Рецепт не в избранном'
             )
 
-        elif request.method == 'DELETE':
-            deleted, _ = model_class.objects.filter(
-                user=user, recipe=recipe).delete()
-            if not deleted:
-                return Response(
-                    {'error': 'Рецепт не в избранном'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
-    def handle_shopping_cart_action(
-            self, request, pk, model_class, serializer_class):
+    def handle_shopping_cart_action(self, request, pk, model_class,
+                                    serializer_class):
         """Обрабатывает действия добавления/удаления рецептов в список."""
-        user = request.user
-        recipe = get_object_or_404(Recipe, id=pk)
-
         if request.method == 'POST':
-            if model_class.objects.filter(user=user, recipe=recipe).exists():
-                return Response(
-                    {'error': 'Рецепт уже в списке покупок'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            data = {'user': user.id, 'recipe': recipe.id}
-            serializer = serializer_class(
-                data=data, context={'request': request})
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-
-            return Response(
-                serializer.data,
-                status=status.HTTP_201_CREATED
+            return create_relation(
+                request=request,
+                obj_id=pk,
+                model_class=model_class,
+                serializer_class=serializer_class,
+                obj_model=Recipe,
+                error_exists='Рецепт уже в списке покупок'
             )
-
         elif request.method == 'DELETE':
-            deleted, _ = model_class.objects.filter(
-                user=user, recipe=recipe).delete()
-            if not deleted:
-                return Response(
-                    {'error': 'Рецепт не в списке покупок'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return delete_relation(
+                request=request,
+                obj_id=pk,
+                model_class=model_class,
+                error_not_found='Рецепт не в списке покупок'
+            )
 
 
 class SubscriptionActionMixin:
     """Миксин для действий с подписками на авторов."""
 
-    def handle_subscription_action(
-            self, request, user_id, model_class, serializer_class):
+    def handle_subscription_action(self, request, user_id, model_class,
+                                   serializer_class):
         """Обрабатывает действия подписки/отписки от авторов."""
-        user = request.user
-        author = get_object_or_404(User, id=user_id)
-
         if request.method == 'POST':
-            if user == author:
-                return Response(
-                    {'error': 'Нельзя подписаться на самого себя'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            if model_class.objects.filter(user=user, author=author).exists():
-                return Response(
-                    {'error': 'Вы уже подписаны на этого автора'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            data = {'user': user.id, 'author': author.id}
-            serializer = serializer_class(
-                data=data, context={'request': request})
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-
-            return Response(
-                serializer.data,
-                status=status.HTTP_201_CREATED
+            return create_relation(
+                request=request,
+                obj_id=user_id,
+                model_class=model_class,
+                serializer_class=serializer_class,
+                obj_model=User,
+                user_field='user',
+                obj_field='author',
+                error_exists='Вы уже подписаны на этого автора',
+                error_self='Нельзя подписаться на самого себя',
+                check_self=True
             )
-
         elif request.method == 'DELETE':
-            deleted, _ = model_class.objects.filter(
-                user=user, author=author).delete()
-            if not deleted:
-                return Response(
-                    {'error': 'Вы не подписаны на этого автора'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return delete_relation(
+                request=request,
+                obj_id=user_id,
+                model_class=model_class,
+                user_field='user',
+                obj_field='author',
+                error_not_found='Вы не подписаны на этого автора'
+            )
