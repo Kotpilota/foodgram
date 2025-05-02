@@ -55,9 +55,10 @@ def delete_relation(request, obj_id, model_class, user_field='user',
 class CollectionActionMixin:
     """Миксин для действий с коллекциями рецептов."""
 
-    def handle_favorite_action(self, request, pk, model_class,
-                               serializer_class):
-        """Обрабатывает действия добавления/удаления рецептов в избранное."""
+    def handle_collection_action(self, request, pk, model_class,
+                                 serializer_class, error_exists,
+                                 error_not_found):
+        """Обрабатывает действия добавления/удаления рецептов в коллекции."""
         if request.method == 'POST':
             return create_relation(
                 request=request,
@@ -65,34 +66,14 @@ class CollectionActionMixin:
                 model_class=model_class,
                 serializer_class=serializer_class,
                 obj_model=Recipe,
-                error_exists='Рецепт уже в избранном'
+                error_exists=error_exists
             )
         elif request.method == 'DELETE':
             return delete_relation(
                 request=request,
                 obj_id=pk,
                 model_class=model_class,
-                error_not_found='Рецепт не в избранном'
-            )
-
-    def handle_shopping_cart_action(self, request, pk, model_class,
-                                    serializer_class):
-        """Обрабатывает действия добавления/удаления рецептов в список."""
-        if request.method == 'POST':
-            return create_relation(
-                request=request,
-                obj_id=pk,
-                model_class=model_class,
-                serializer_class=serializer_class,
-                obj_model=Recipe,
-                error_exists='Рецепт уже в списке покупок'
-            )
-        elif request.method == 'DELETE':
-            return delete_relation(
-                request=request,
-                obj_id=pk,
-                model_class=model_class,
-                error_not_found='Рецепт не в списке покупок'
+                error_not_found=error_not_found
             )
 
 

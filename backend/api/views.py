@@ -201,11 +201,13 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
     )
     def favorite(self, request, pk=None):
         """Добавляет/удаляет рецепт в избранное."""
-        return self.handle_favorite_action(
+        return self.handle_collection_action(
             request=request,
             pk=pk,
             model_class=Favorite,
-            serializer_class=FavoriteSerializer
+            serializer_class=FavoriteSerializer,
+            error_exists='Рецепт уже в избранном',
+            error_not_found='Рецепт не в избранном'
         )
 
     @action(
@@ -215,11 +217,13 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
     )
     def shopping_cart(self, request, pk=None):
         """Добавляет/удаляет рецепт в список покупок."""
-        return self.handle_shopping_cart_action(
+        return self.handle_collection_action(
             request=request,
             pk=pk,
             model_class=ShoppingCart,
-            serializer_class=ShoppingCartSerializer
+            serializer_class=ShoppingCartSerializer,
+            error_exists='Рецепт уже в списке покупок',
+            error_not_found='Рецепт не в списке покупок'
         )
 
     def _create_shopping_list_content(self, user):
