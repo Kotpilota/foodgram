@@ -150,12 +150,6 @@ class Favorite(UserRecipeRelation):
     class Meta:
         verbose_name = 'Избранное'
         verbose_name_plural = 'Избранное'
-        constraints = [
-            models.UniqueConstraint(
-                fields=['user', 'recipe'],
-                name='unique_favorite'
-            )
-        ]
 
 
 class ShoppingCart(UserRecipeRelation):
@@ -164,9 +158,3 @@ class ShoppingCart(UserRecipeRelation):
     class Meta:
         verbose_name = 'Список покупок'
         verbose_name_plural = 'Списки покупок'
-        constraints = [
-            models.UniqueConstraint(
-                fields=['user', 'recipe'],
-                name='unique_shopping_cart'
-            )
-        ]
