@@ -225,7 +225,7 @@ class RecipeViewSet(viewsets.ModelViewSet, CollectionActionMixin):
     def _create_shopping_list_content(self, user):
         """Создает содержимое списка покупок."""
         ingredients = RecipeIngredient.objects.filter(
-            recipe__in_shopping_cart__user=user
+            recipe__shoppingcart_by__user=user
         ).values(
             'ingredient__name', 'ingredient__measurement_unit'
         ).annotate(
