@@ -55,6 +55,16 @@ class UserCreateSerializer(serializers.ModelSerializer):
         )
         extra_kwargs = {'password': {'write_only': True}}
 
+    def create(self, validated_data):
+        """Создает и возвращает нового пользователя."""
+        return User.objects.create_user(
+            email=validated_data['email'],
+            username=validated_data.get('username'),
+            password=validated_data['password'],
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', '')
+        )
+
 
 class SetPasswordSerializer(serializers.Serializer):
     """Сериализатор для смены пароля пользователя."""
@@ -145,6 +155,19 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
             'image', 'text', 'cooking_time'
         )
 
+    def validate(self, data):
+        """Общая валидация данных."""
+        request = self.context.get('request')
+        if request and request.method == 'PATCH':
+            if 'ingredients' not in self.initial_data:
+                raise serializers.ValidationError(
+                    {"ingredients": ["Обязательное поле."]})
+            if 'tags' not in self.initial_data:
+                raise serializers.ValidationError(
+                    {"tags": ["Обязательное поле."]})
+
+        return data
+
     def validate_ingredients(self, ingredients):
         """Валидация уникальности ингредиентов."""
         if not ingredients:
@@ -155,6 +178,7 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
         ingredient_ids = [ingredient['id'].id for ingredient in ingredients]
         if len(ingredient_ids) != len(set(ingredient_ids)):
             raise serializers.ValidationError('Ингредиенты повторяются')
+
         return ingredients
 
     def validate_tags(self, tags):
@@ -201,7 +225,6 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
         ingredients = validated_data.pop('ingredients')
 
         instance.tags.set(tags)
-
         instance.recipe_ingredients.all().delete()
         self.create_ingredients(instance, ingredients)
 
