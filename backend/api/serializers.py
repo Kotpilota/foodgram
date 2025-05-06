@@ -161,10 +161,10 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
         if request and request.method == 'PATCH':
             if 'ingredients' not in self.initial_data:
                 raise serializers.ValidationError(
-                    {"ingredients": ["Обязательное поле."]})
+                    {'ingredients': ['Обязательное поле.']})
             if 'tags' not in self.initial_data:
                 raise serializers.ValidationError(
-                    {"tags": ["Обязательное поле."]})
+                    {'tags': ['Обязательное поле.']})
 
         return data
 
