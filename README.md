@@ -339,6 +339,6 @@ docker compose exec backend coverage report
 
 **Made with ❤️ for food lovers and cooking enthusiasts**
 
-[⭐ Star this repo](https://github.com/yourusername/foodgram_final/stargazers) | [🐛 Report Bug](https://github.com/yourusername/foodgram_final/issues) | [💡 Request Feature](https://github.com/yourusername/foodgram_final/issues)
+[⭐ Star this repo](https://github.com/Kotpilota/foodgram/stargazers) | [🐛 Report Bug](https://github.com/Kotpilota/foodgram/issues) | [💡 Request Feature](https://github.com/Kotpilota/foodgram/issues)
 
 </div>
